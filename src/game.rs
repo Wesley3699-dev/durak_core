@@ -9,7 +9,7 @@ pub struct Player {
     pub hand: u64,
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum GameState {
     Setup,
     Playing,
@@ -167,28 +167,7 @@ impl<const MAX_PLAYERS: usize> Game<MAX_PLAYERS> {
             }
         }
 
-        for step in 0..self.players_count {
-            let chair = (self.attacker + step) % self.players_count;
-            if chair != self.defender {
-                self.draw(chair);
-            }
-        }
-
-        self.draw(self.defender);
-
-        self.attacker = self.find_active(self.defender);
-        self.defender = self.find_active(self.attacker);
-
-        self.defender_hand_at_bout_start =
-            self.players[self.defender as usize].hand.count_ones() as u8;
-
-        let active_players = (0..self.players_count)
-            .filter(|&x| self.is_active(x))
-            .count();
-
-        if active_players == 1 {
-            self.state = GameState::GameOver;
-        }
+        self.end_bout(false);
     }
 
     pub fn pass(&mut self) {
@@ -216,7 +195,10 @@ impl<const MAX_PLAYERS: usize> Game<MAX_PLAYERS> {
                 self.table.defense_cards[i] = None
             }
         }
+        self.end_bout(true);
+    }
 
+    fn end_bout(&mut self, is_defended: bool) {
         for step in 0..self.players_count {
             let chair = (self.attacker + step) % self.players_count;
             if chair != self.defender {
@@ -226,11 +208,24 @@ impl<const MAX_PLAYERS: usize> Game<MAX_PLAYERS> {
 
         self.draw(self.defender);
 
-        self.attacker = self.find_active(self.attacker);
-        self.defender = self.find_active(self.attacker);
+        if !is_defended {
+            self.attacker = self.find_active(self.defender);
+            self.defender = self.find_active(self.attacker);
+        } else {
+            self.attacker = self.find_active(self.attacker);
+            self.defender = self.find_active(self.attacker);
+        }
 
         self.defender_hand_at_bout_start =
             self.players[self.defender as usize].hand.count_ones() as u8;
+
+        let active_players = (0..self.players_count)
+            .filter(|&x| self.is_active(x))
+            .count();
+
+        if active_players == 1 {
+            self.state = GameState::GameOver;
+        }
     }
 
     pub fn is_active(&self, chair: u8) -> bool {
@@ -255,7 +250,7 @@ impl<const MAX_PLAYERS: usize> Game<MAX_PLAYERS> {
 
 #[cfg(test)]
 mod tests {
-    use crate::deck::DeckSize::TwentyFour;
+    use crate::{deck::DeckSize::TwentyFour, game::GameState::GameOver};
 
     use super::*;
 
@@ -270,5 +265,23 @@ mod tests {
 
         let x = game.find_active(0);
         assert_eq!(x, 2);
+    }
+
+    #[test]
+    fn test_end_bout() {
+        let mut game = Game::<6>::new(3, TwentyFour);
+
+        game.deck.len = 0;
+        game.players[0].hand = 0;
+        game.players[1].hand = 0;
+        game.players[2].hand = 1;
+        game.attacker = 1;
+        game.defender = 2;
+        game.table.attack_cards[0] = Some(1);
+        game.table.defense_cards[0] = Some(5);
+        game.state = Playing;
+        game.pass();
+
+        assert_eq!(game.state, GameOver)
     }
 }
