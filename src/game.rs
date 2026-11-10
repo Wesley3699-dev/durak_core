@@ -115,7 +115,7 @@ impl<const MAX_PLAYERS: usize> Game<MAX_PLAYERS> {
         }
 
         for i in 0..max_attack as usize {
-            if self.table.attack_cards[i] == None {
+            if self.table.attack_cards[i].is_none() {
                 self.table.attack_cards[i] = Some(card);
                 self.players[self.attacker as usize].hand &= !(1u64 << card);
                 break;
@@ -283,5 +283,51 @@ mod tests {
         game.pass();
 
         assert_eq!(game.state, GameOver)
+    }
+
+    #[test]
+    fn test_pass_rotation() {
+        let mut game = Game::<6>::new(3, TwentyFour);
+
+        game.deck.len = 0;
+
+        game.players[0].hand = 1;
+        game.players[1].hand = 1;
+        game.players[2].hand = 1;
+
+        game.attacker = 0;
+        game.defender = 1;
+
+        game.table.attack_cards[0] = Some(1);
+        game.table.defense_cards[0] = Some(5);
+
+        game.state = Playing;
+
+        game.pass();
+        assert_eq!(game.attacker, 1);
+        assert_eq!(game.defender, 2);
+    }
+
+    #[test]
+    fn test_take_rotation() {
+        let mut game = Game::<6>::new(3, TwentyFour);
+
+        game.deck.len = 0;
+
+        game.players[0].hand = 1;
+        game.players[1].hand = 1;
+        game.players[2].hand = 1;
+
+        game.attacker = 0;
+        game.defender = 1;
+
+        game.table.attack_cards[0] = Some(1);
+        game.table.defense_cards[0] = Some(5);
+
+        game.state = Playing;
+
+        game.take();
+        assert_eq!(game.attacker, 2);
+        assert_eq!(game.defender, 0);
     }
 }
