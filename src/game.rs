@@ -55,7 +55,7 @@ impl<const MAX_PLAYERS: usize> Game<MAX_PLAYERS> {
         for _ in 0..6 {
             for i in 0..self.players_count as usize {
                 if let Some(card) = self.deck.pop() {
-                    self.players[i].hand |= 1u64 << card;
+                    self.pop_card_to_hand(i as u8, card);
                 }
             }
         }
@@ -68,24 +68,27 @@ impl<const MAX_PLAYERS: usize> Game<MAX_PLAYERS> {
         if hand_size < 6 {
             for _ in 0..6 - hand_size {
                 if let Some(card) = self.deck.pop() {
-                    self.players[player as usize].hand |= 1u64 << card;
+                    self.pop_card_to_hand(player, card);
                 }
             }
         }
     }
 
+    pub fn pop_card_to_hand(&mut self, player: u8, card: u8) {
+        self.players[player as usize].hand |= 1u64 << card
+    }
+
     pub fn turn_init(&mut self) {
         let mut lowest_trump: u8 = 255;
-        let trump_suit = self.deck.trump_card % 4;
+        let trump_mask: u64 = 0x1111111111111111 << (self.deck.trump_card as usize % 4);
         let mut attacker_index: usize = 0;
         for i in 0..self.players_count as usize {
-            for item in 0..52 {
-                if (self.players[i].hand & (1u64 << item)) != 0 {
-                    if (item % 4 == trump_suit) && (item / 4 < lowest_trump) {
-                        lowest_trump = item / 4;
-                        attacker_index = i;
-                    }
-                }
+            let trump_hand = self.players[i].hand & trump_mask;
+            if trump_hand.trailing_zeros() != 64
+                && trump_hand.trailing_zeros() < lowest_trump as u32
+            {
+                lowest_trump = trump_hand.trailing_zeros() as u8;
+                attacker_index = i
             }
         }
         self.attacker = attacker_index as u8;
@@ -158,11 +161,11 @@ impl<const MAX_PLAYERS: usize> Game<MAX_PLAYERS> {
         }
         for i in 0..6 {
             if let Some(card) = self.table.attack_cards[i] {
-                self.players[self.defender as usize].hand |= 1u64 << card;
+                self.pop_card_to_hand(self.defender, card);
                 self.table.attack_cards[i] = None
             }
             if let Some(card) = self.table.defense_cards[i] {
-                self.players[self.defender as usize].hand |= 1u64 << card;
+                self.pop_card_to_hand(self.defender, card);
                 self.table.defense_cards[i] = None
             }
         }
@@ -329,5 +332,18 @@ mod tests {
         game.take();
         assert_eq!(game.attacker, 2);
         assert_eq!(game.defender, 0);
+    }
+
+    #[test]
+    fn test_turn_init() {
+        let mut game = Game::<6>::new(3, TwentyFour);
+        game.deck.len = 0;
+        game.deck.trump_card = 2;
+        game.players[0].hand = 1u64 << 30;
+        game.players[1].hand = 1u64 << 6;
+        game.players[2].hand = 1u64 << 10;
+        game.turn_init();
+        assert_eq!(game.attacker, 1);
+        assert_eq!(game.defender, 2);
     }
 }
